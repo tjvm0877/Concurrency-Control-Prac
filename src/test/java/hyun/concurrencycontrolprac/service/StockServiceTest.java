@@ -21,7 +21,7 @@ import hyun.concurrencycontrolprac.repository.StockRepository;
 class StockServiceTest {
 
 	@Autowired
-	private PessimisticStockService stockService;
+	private StockService stockService;
 
 	@Autowired
 	private StockRepository stockRepository;
@@ -52,7 +52,7 @@ class StockServiceTest {
 	}
 
 	@Test
-	@DisplayName("동시에 100개 주문")
+	@DisplayName("동시에 100개 주문, 일반적인 동시성 이슈")
 	public void decreaseAtSameTime() throws InterruptedException {
 
 		// given
@@ -66,6 +66,33 @@ class StockServiceTest {
 			executorService.submit(() -> {
 				try {
 					stockService.decrease(savedStock.getId(), 1L);
+				} finally {
+					latch.countDown();
+				}
+			});
+		}
+		latch.await();
+
+		// then
+		Stock result = stockRepository.findAll().get(0);
+		assertThat(result.getQuantity()).isNotEqualTo(0L);
+	}
+
+	@Test
+	@DisplayName("동시에 100개 주문, 비관적 잠금(Pessimistic Lock) 적용")
+	public void pessimisticDecreaseAtSameTime() throws InterruptedException {
+
+		// given
+		Stock savedStock = stockRepository.findAll().get(0);
+		int threadCount = 100;
+		ExecutorService executorService = Executors.newFixedThreadPool(32);
+		CountDownLatch latch = new CountDownLatch(threadCount);
+
+		// when
+		for (int i = 0; i < threadCount; i++) {
+			executorService.submit(() -> {
+				try {
+					stockService.pessimisticDecrease(savedStock.getId(), 1L);
 				} finally {
 					latch.countDown();
 				}
