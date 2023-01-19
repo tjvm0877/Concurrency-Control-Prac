@@ -23,8 +23,15 @@ public class StockService {
 
 	@Transactional
 	public void pessimisticDecrease(Long id, Long quantity) {
-		// 비관적 잠금(Pessimistic Lock)을 걸고 데이터 조회 후, 데이터를 저장
+		// 비관적 잠금(Pessimistic Lock)을 걸고 데이터 조회 후
 		Stock stock = stockRepository.findByIdWithPessimisticLock(id);
+		stock.decrease(quantity);
+	}
+
+	@Transactional
+	public void optimisticDecrease(Long id, Long quantity) {
+		// 낙관적 잠금(Optimistic Lock)을 걸고 데이터 조회
+		Stock stock = stockRepository.findByIdWithOptimisticLock(id);
 		stock.decrease(quantity);
 	}
 }
