@@ -21,14 +21,13 @@ import hyun.concurrencycontrolprac.repository.StockRepository;
 class StockServiceTest {
 
 	@Autowired
-	private StockService stockService;
+	private PessimisticStockService stockService;
 
 	@Autowired
 	private StockRepository stockRepository;
 
 	@BeforeEach
 	public void insert() {
-		// 테스트 시작 전 상품 등록
 		Stock stock = new Stock(1L, 100L);
 		stockRepository.save(stock);
 	}
@@ -41,8 +40,11 @@ class StockServiceTest {
 	@Test
 	@DisplayName("상품 단일 주문")
 	public void decrease() {
-		// given & when
-		stockService.decrease(1L, 1L);
+		// given
+		Stock savedStock = stockRepository.findAll().get(0);
+
+		// when
+		stockService.decrease(savedStock.getId(), 1L);
 
 		// then
 		Stock result = stockRepository.findAll().get(0);
@@ -54,6 +56,7 @@ class StockServiceTest {
 	public void decreaseAtSameTime() throws InterruptedException {
 
 		// given
+		Stock savedStock = stockRepository.findAll().get(0);
 		int threadCount = 100;
 		ExecutorService executorService = Executors.newFixedThreadPool(32);
 		CountDownLatch latch = new CountDownLatch(threadCount);
@@ -62,7 +65,7 @@ class StockServiceTest {
 		for (int i = 0; i < threadCount; i++) {
 			executorService.submit(() -> {
 				try {
-					stockService.decrease(1L, 1L);
+					stockService.decrease(savedStock.getId(), 1L);
 				} finally {
 					latch.countDown();
 				}
@@ -72,7 +75,6 @@ class StockServiceTest {
 
 		// then
 		Stock result = stockRepository.findAll().get(0);
-
 		assertThat(result.getQuantity()).isEqualTo(0L);
 	}
 }
