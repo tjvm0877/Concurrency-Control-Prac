@@ -2,6 +2,7 @@ package hyun.concurrencycontrolprac.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import hyun.concurrencycontrolprac.entity.Stock;
@@ -14,7 +15,7 @@ public class StockService {
 
 	private final StockRepository stockRepository;
 
-	@Transactional
+	@Transactional(propagation = Propagation.REQUIRES_NEW) // Named Lock은 부모의 트랜잭션과 별도로 실행되어야 하기 때문에 propergation을 변경
 	public void decrease(Long id, Long quantity) {
 		Stock selectedStock = stockRepository.findById(id).orElseThrow();
 

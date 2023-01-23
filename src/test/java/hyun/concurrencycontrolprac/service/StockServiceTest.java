@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import hyun.concurrencycontrolprac.entity.Stock;
+import hyun.concurrencycontrolprac.facade.NamedLockStockFacade;
 import hyun.concurrencycontrolprac.facade.OptimisticLockStockFacade;
 import hyun.concurrencycontrolprac.repository.StockRepository;
 
@@ -29,6 +30,9 @@ class StockServiceTest {
 
 	@Autowired
 	private OptimisticLockStockFacade optimisticStockService;
+
+	@Autowired
+	private NamedLockStockFacade namedLockStockService;
 
 	@BeforeEach
 	public void insert() {
@@ -138,5 +142,32 @@ class StockServiceTest {
 		// then
 		Stock result = stockRepository.findAll().get(0);
 		assertThat(result.getQuantity()).isEqualTo(0L);
+	}
+
+	@Test
+	@DisplayName("동시에 100개 주문, Named Lock 적용")
+	public void NamedDecreaseAtSameTime() throws InterruptedException {
+
+		// given
+		Stock savedStock = stockRepository.findAll().get(0);
+		int threadCount = 100;
+		ExecutorService executorService = Executors.newFixedThreadPool(32);
+		CountDownLatch latch = new CountDownLatch(threadCount);
+
+		// when
+		for (int i = 0; i < threadCount; i++) {
+			executorService.submit(() -> {
+				try {
+					stockService.decrease(savedStock.getId(), 1L);
+				} finally {
+					latch.countDown();
+				}
+			});
+		}
+		latch.await();
+
+		// then
+		Stock result = stockRepository.findAll().get(0);
+		assertThat(result.getQuantity()).isNotEqualTo(0L);
 	}
 }
