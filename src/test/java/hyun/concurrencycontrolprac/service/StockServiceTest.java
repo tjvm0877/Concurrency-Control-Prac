@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import hyun.concurrencycontrolprac.entity.Stock;
 import hyun.concurrencycontrolprac.facade.NamedLockStockFacade;
 import hyun.concurrencycontrolprac.facade.OptimisticLockStockFacade;
+import hyun.concurrencycontrolprac.facade.RedissonLockStockFacade;
 import hyun.concurrencycontrolprac.repository.StockRepository;
 
 @SpringBootTest
@@ -33,6 +34,9 @@ class StockServiceTest {
 
 	@Autowired
 	private NamedLockStockFacade namedLockStockService;
+
+	@Autowired
+	RedissonLockStockFacade redissonLockStockService;
 
 	@BeforeEach
 	public void insert() {
@@ -88,7 +92,7 @@ class StockServiceTest {
 
 	@Test
 	@DisplayName("동시에 100개 주문, 비관적 잠금(Pessimistic Lock) 적용")
-	public void pessimisticDecreaseAtSameTime() throws InterruptedException {
+	public void DecreaseAtSameTimeWithPessimisticLock() throws InterruptedException {
 
 		// given
 		Stock savedStock = stockRepository.findAll().get(0);
@@ -115,7 +119,7 @@ class StockServiceTest {
 
 	@Test
 	@DisplayName("동시에 100개 주문, 낙관적 잠금(Optimistic Lock) 적용")
-	public void optimisticDecreaseAtSameTime() throws InterruptedException {
+	public void DecreaseAtSameTimeWithOptimisticLock() throws InterruptedException {
 
 		// given
 		Stock savedStock = stockRepository.findAll().get(0);
@@ -146,7 +150,7 @@ class StockServiceTest {
 
 	@Test
 	@DisplayName("동시에 100개 주문, Named Lock 적용")
-	public void NamedDecreaseAtSameTime() throws InterruptedException {
+	public void DecreaseAtSameTimeWithNamedLock() throws InterruptedException {
 
 		// given
 		Stock savedStock = stockRepository.findAll().get(0);
@@ -158,7 +162,34 @@ class StockServiceTest {
 		for (int i = 0; i < threadCount; i++) {
 			executorService.submit(() -> {
 				try {
-					stockService.decrease(savedStock.getId(), 1L);
+					namedLockStockService.decrease(savedStock.getId(), 1L);
+				} finally {
+					latch.countDown();
+				}
+			});
+		}
+		latch.await();
+
+		// then
+		Stock result = stockRepository.findAll().get(0);
+		assertThat(result.getQuantity()).isNotEqualTo(0L);
+	}
+
+	@Test
+	@DisplayName("동시에 100개 주문, Redisson을 이용한 Lock적용")
+	public void DecreaseAtSameTimeWithRedisson() throws InterruptedException {
+
+		// given
+		Stock savedStock = stockRepository.findAll().get(0);
+		int threadCount = 100;
+		ExecutorService executorService = Executors.newFixedThreadPool(32);
+		CountDownLatch latch = new CountDownLatch(threadCount);
+
+		// when
+		for (int i = 0; i < threadCount; i++) {
+			executorService.submit(() -> {
+				try {
+					redissonLockStockService.decrease(savedStock.getId(), 1L);
 				} finally {
 					latch.countDown();
 				}
