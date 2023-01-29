@@ -33,6 +33,4 @@ public class RedissonLockStockFacade {
 			lock.unlock();
 		}
 	}
-
-
 }

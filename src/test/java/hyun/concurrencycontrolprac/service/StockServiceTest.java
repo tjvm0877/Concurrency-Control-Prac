@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import hyun.concurrencycontrolprac.entity.Stock;
+import hyun.concurrencycontrolprac.facade.LettuceLockStockFacade;
 import hyun.concurrencycontrolprac.facade.NamedLockStockFacade;
 import hyun.concurrencycontrolprac.facade.OptimisticLockStockFacade;
 import hyun.concurrencycontrolprac.facade.RedissonLockStockFacade;
@@ -36,7 +37,10 @@ class StockServiceTest {
 	private NamedLockStockFacade namedLockStockService;
 
 	@Autowired
-	RedissonLockStockFacade redissonLockStockService;
+	private RedissonLockStockFacade redissonLockStockService;
+
+	@Autowired
+	private LettuceLockStockFacade lettuceLockStockService;
 
 	@BeforeEach
 	public void insert() {
@@ -190,6 +194,35 @@ class StockServiceTest {
 			executorService.submit(() -> {
 				try {
 					redissonLockStockService.decrease(savedStock.getId(), 1L);
+				} finally {
+					latch.countDown();
+				}
+			});
+		}
+		latch.await();
+
+		// then
+		Stock result = stockRepository.findAll().get(0);
+		assertThat(result.getQuantity()).isNotEqualTo(0L);
+	}
+
+	@Test
+	@DisplayName("동시에 100개 주문, Lettuce를 이용한 Lock적용")
+	public void DecreaseAtSameTimeWithLettuce() throws InterruptedException {
+
+		// given
+		Stock savedStock = stockRepository.findAll().get(0);
+		int threadCount = 100;
+		ExecutorService executorService = Executors.newFixedThreadPool(32);
+		CountDownLatch latch = new CountDownLatch(threadCount);
+
+		// when
+		for (int i = 0; i < threadCount; i++) {
+			executorService.submit(() -> {
+				try {
+					lettuceLockStockService.decrease(savedStock.getId(), 1L);
+				} catch (InterruptedException e) {
+					throw new RuntimeException(e);
 				} finally {
 					latch.countDown();
 				}
